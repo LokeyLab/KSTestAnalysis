@@ -15,4 +15,4 @@ Additionally, the main most of the displayed images are downloadable from the we
 *NOTE:* Due to the limited resources that the Streamlit cloud provides, **we do not recommend that you use the tool to its fullest extent on the**
 **Streamlit website**. Instead, we recommend running the web app locally through a docker image (*instructions provided below*). Trying to use
 the app to its fullest extent on the streamlit site will cause the program to crash. 
-    - *If the app is not up and running on the link above please email <dtvsworld@gmail.com>.*
+- *If the app is not up and running on the link above please email <dtvsworld@gmail.com>.*
