@@ -26,7 +26,7 @@ In order to run the webapp locally, you must use a docker image. To pull the doc
     - For more info visit the [Docker site](https://docs.docker.com/engine/install/)!
 
 Once you have pulled the docker image, you can finally launch the webapp locally by using the following command:
-- `docker run -p 8501:8501 streamlit`
+- `docker run -p 8501:8501 wonderfel/kstestanalysisapp`
 
 To access the web app, open your favorite browser and enter one of the links below:
 - <http://localhost:8501>
