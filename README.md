@@ -1,5 +1,5 @@
 # Kolmogorov–Smirnov Test Analysis Web App
-### R code originally developed by Akshar Lohith 
+### R code originally developed by Elizabeth MacMillan and Suzie Hight, repourposed and provided by Akshar Lohith 
 ### Converted and modified into Python by Derfel Terciano
 
 ## Description and Warnings
