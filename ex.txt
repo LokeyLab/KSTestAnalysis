@@ -1,0 +1,1 @@
+python ksCLI.py -k "/home/derfelt/kstestdata/KS_pythonConverted/prototype files/modifiedProtypes/keyModified.csv" -d "/home/derfelt/kstestdata/KS_pythonConverted/prototype files/modifiedProtypes/dataSets" -kt Targets1 SWID -e Others -n cp cpRed fusion
