@@ -1,7 +1,7 @@
 import os, subprocess, io
 from ksCompTools import *
 
-import pandas as pd, numpy as np
+import pandas as pd, numpy as np, plotly as plt
 
 class KSProcessingCLI:
     def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: list = None):
@@ -76,6 +76,9 @@ class KSProcessingCLI:
         pearson, euc = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
         return pearson, euc
     
+    def plotPVals(self, pearson, euc, outName, **kwargs):
+        fig = plotPVals(pearsonDf=pearson, euclideanDf=euc)
+        fig.write_image(f'{outName}PValPlot.pdf', format='pdf', **kwargs)
 
 
 class CommandLine:
@@ -95,7 +98,7 @@ class CommandLine:
         self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of strings that contains the 1) compound 2) IDs')
         self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which rows to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
-        self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in directory')
+        self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
 
         #args
         if inOpts is None:
@@ -116,12 +119,14 @@ def main(inOpts = None):
 
     ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name)
     
-    pdf = f'{outFile}.pdf'
+    pdf = f'{outFile}ecdfGraphs.pdf'
     ks.plotCalcData(outName=pdf)
     pearson, euc = ks.generatePVals()
 
     pearson.to_csv(f'{outFile}Pearson.csv', sep =',')
     euc.to_csv(f'{outFile}Euc.csv', sep =',')
+
+    ks.plotPVals(pearson=pearson, euc=euc, outName=outFile, width=1080, height=720)
 
 if __name__ == '__main__':
     main()
