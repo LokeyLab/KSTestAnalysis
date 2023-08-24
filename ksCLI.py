@@ -107,7 +107,7 @@ class CommandLine:
             self.args = self.parser.parse_args(inOpts)
 
 def main(inOpts = None):
-    cl = CommandLine(inOpts=None)
+    cl = CommandLine(inOpts=inOpts)
 
     keyFile = cl.args.keyFile
     dsFolder = cl.args.datasets
