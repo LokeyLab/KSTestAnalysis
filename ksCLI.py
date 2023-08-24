@@ -89,14 +89,14 @@ class CommandLine:
             description='CLI version of KSTestApp program',
             prefix_chars='-',
             add_help=True,
-            usage='python3 ksCLI.py -k <.csv file> -d <FOLDER containing datasets> -kt <list of string of key columns> -e <list of rows to exclue>'
+            usage='python3 ksCLI.py -k <.csv file> -d <FOLDER containing datasets> -kt <list of header strings of key columns> -e <list of classes to exclue>'
         )
 
         #arguments
         self.parser.add_argument('-k', '--keyFile', type=str, required=True, nargs='?', action='store', help='Key file (.csv)')
         self.parser.add_argument('-d', '--datasets', type=str, required=True, nargs='?', action='store', help='A path to a folder containing all the datasets (.csv)')
-        self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of strings that contains the 1) compound 2) IDs')
-        self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which rows to exclude')
+        self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) IDs')
+        self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which classes to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
 
