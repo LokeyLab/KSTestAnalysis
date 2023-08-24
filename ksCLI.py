@@ -25,8 +25,8 @@ class KSProcessingCLI:
             for name, file in zip(dsNames, os.listdir(self.dataFolder)):
                 currDataset = os.path.join(self.dataFolder, file)
                 self.data[name] = pd.read_csv(currDataset, index_col=0)
-                if self.data[file].index.name is None:
-                    self.data[file].index.name = 'Index'
+                if self.data[name].index.name is None:
+                    self.data[name].index.name = 'Index'
                 self.data[name] = dup(self.data[name])
 
         self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
