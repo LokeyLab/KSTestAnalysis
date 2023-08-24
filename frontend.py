@@ -90,10 +90,10 @@ if keyDF is not None and len(dataSets) > 0:
         
         leftCol, rightCol = st.columns(2)
         with leftCol:
-            compoundKey = st.selectbox('Select the compound column from key file:', keyDF.columns)
+            compoundKey = st.selectbox('Select the compound Class column from key file:', keyDF.columns)
         
         with rightCol:
-            idKey = st.selectbox('Select the ID columns from the key file:', keyDF.columns)
+            idKey = st.selectbox('Select the compound ID columns from the key file:', keyDF.columns)
 
         userCompoundOptions = keyDF[compoundKey].unique()
         excluded = st.multiselect(label='Select compounds to exclude if any:', options=userCompoundOptions, \
