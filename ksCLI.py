@@ -72,9 +72,9 @@ class KSProcessingCLI:
         self.pearsonECDF, self.euclideanECDF = pearson, euc
         return pearson, euc
 
-    def plotCalcData(self, outName: str, selectComps: list = None):
+    def plotCalcData(self, outName: str, selectComps: list = None, produceImg = True):
         selects = self.groups if selectComps is None else selectComps
-        self.pearsonECDF, self.euclideanECDF = plotData(pearsonData=self.datasetsCorrList, eucData=self.datasetsDistList, groups=self.comps, names=self.names, pdfName=outName)
+        self.pearsonECDF, self.euclideanECDF = plotData(pearsonData=self.datasetsCorrList, eucData=self.datasetsDistList, groups=self.comps, names=self.names, pdfName=outName, produceImg=produceImg)
     
     def generatePVals(self):
         pearson, euc = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
@@ -103,6 +103,7 @@ class CommandLine:
         self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which classes to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
+        self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
 
         #args
         if inOpts is None:
@@ -118,13 +119,14 @@ def main(inOpts = None):
     keyTargs = cl.args.keyTarg
     excludes = cl.args.exclude
     outFile = cl.args.outName
+    prodImage = cl.args.image
 
     key = pd.read_csv(keyFile, sep=',')
 
     ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
-    ks.plotCalcData(outName=pdf)
+    ks.plotCalcData(outName=pdf, produceImg=prodImage)
     pearson, euc = ks.generatePVals()
 
     pearson.to_csv(f'{outFile}Pearson.csv', sep =',')
