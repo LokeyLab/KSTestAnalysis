@@ -1,5 +1,8 @@
+import ray
+ray.init(runtime_env={'env_vars': {'__MODIN_AUTOIMPORT_PANDAS__': '1'}})
+
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 
 from scipy.stats import kstest as kstest
 from scipy.spatial.distance import pdist, squareform
@@ -76,7 +79,13 @@ def calcKS(group, data, euc = True, forceCalc = False):
         #if forceCalc:
         fBkdata_i = fBkdata_i[~np.isnan(fBkdata_i)]
         
-        lims = [np.quantile(fBkdata_i, q=0.02), np.quantile(fBkdata_i, q=0.98)]
+        #lims = [np.quantile(fBkdata_i, q=0.02), np.quantile(fBkdata_i, q=0.98)]
+
+        try: 
+            lims = [np.quantile(fBkdata_i, q=0.02), np.quantile(fBkdata_i, q=0.98)]
+        except:
+            print(fBkdata_i, file=sys.stderr)
+            lims = [0,1]
         
         if len(data_iFlat) == 0 or len(fBk) == 0:
             if forceCalc:
