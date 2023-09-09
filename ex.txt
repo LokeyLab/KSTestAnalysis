@@ -1,1 +1,3 @@
 python ksCLI.py -k "/home/derfelt/kstestdata/KS_pythonConverted/prototype files/modifiedProtypes/keyModified.csv" -d "/home/derfelt/kstestdata/KS_pythonConverted/prototype files/modifiedProtypes/dataSets" -kt Targets1 SWID -e Others -n cp cpRed fusion
+
+python ksCLI.py -k "/mnt/d/LabFiles/L4000-Bioactive Compound Library-Beverley Rabbitts (KIT10006535)_MapCleaned3_KSready.csv" -d '/mnt/d/LabFiles/TargetMol Dataset/primaryDs' -kt Target unambiguous_name -o out  -i
