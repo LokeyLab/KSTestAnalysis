@@ -1,4 +1,5 @@
-import os, subprocess, io, glob, pathlib
+import os, subprocess, io, glob, pathlib, sys
+import tqdm.auto as tqdm
 from ksCompTools import *
 
 import pandas as pd, numpy as np, plotly as plt
@@ -21,18 +22,19 @@ class KSProcessingCLI:
         self.exclude = exclude
         self.keyTargs = keyTargs
         self.data = {}
-        
+                
         if not read_pickle:
+            print(f"reading datafile from {self.dataFolder}",file=sys.stderr)
             # parse data Folder
             if dsNames is None:
-                for file in os.listdir(self.dataFolder):
+                for file in tqdm(os.listdir(self.dataFolder)):
                     currDataset = os.path.join(self.dataFolder, file)
                     self.data[file] = pd.read_csv(currDataset, index_col=0)
                     if self.data[file].index.name is None:
                         self.data[file].index.name = 'Index'
                     self.data[file] = dup(self.data[file])
             else:
-                for name, file in zip(dsNames, os.listdir(self.dataFolder)):
+                for name, file in tqdm(zip(dsNames, os.listdir(self.dataFolder))):
                     currDataset = os.path.join(self.dataFolder, file)
                     self.data[name] = pd.read_csv(currDataset, index_col=0)
                     if self.data[name].index.name is None:
@@ -43,11 +45,12 @@ class KSProcessingCLI:
             self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
             
         else:
+            print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
             # read pickled simMats from pickle folder inside data folder
             # dsNames ignored, only use pickle names
             self.datasetCorr = dict()
             self.datasetDist = dict()
-            for pickleFile in glob.glob(self.dataFolder+"/pickles/*.pkl"):
+            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl")):
                 file = pickleFile.replace('.pkl','')
                 if file.endswith('_CorrMat'):
                     self.datasetCorr[file.replace('_CorrMat','')] = pd.read_pickle(pickleFile)
