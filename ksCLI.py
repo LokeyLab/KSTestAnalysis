@@ -51,17 +51,17 @@ class KSProcessingCLI:
             # dsNames ignored, only use pickle names
             self.datasetCorr = dict()
             self.datasetDist = dict()
-            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl")):
-                file = pickleFile.replace('.pkl','')
+            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.hd5")):
+                file = pickleFile.replace('.hd5','')
                 if file.endswith('_CorrMat'):
-                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_pickle(pickleFile)
+                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_hdf(pickleFile,'corrDF')
                 elif file.endswith('_DistMat'):
-                    self.datasetDist[file.replace('_DistMat','')] = pd.read_pickle(pickleFile)
+                    self.datasetDist[file.replace('_DistMat','')] = pd.read_hdf(pickleFile,'distDF')
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
-            [corrDF.to_pickle(picklePath + f"{k}_CorrMat.pkl") for k,corrDF in self.datasetCorr.items()]
-            [distDF.to_pickle(picklePath + f"{k}_DistMat.pkl") for k,distDF in self.datasetDist.items()]
+            [corrDF.to_hdf(picklePath + f"{k}_CorrMat.hd5",key='corrDF',format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [distDF.to_hdf(picklePath + f"{k}_DistMat.hd5",key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
