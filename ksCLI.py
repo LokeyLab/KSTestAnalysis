@@ -27,15 +27,16 @@ class KSProcessingCLI:
             print(f"reading datafile from {self.dataFolder}",file=sys.stderr)
             # parse data Folder
             if dsNames is None:
-                for file in tqdm(os.listdir(self.dataFolder)):
-                    currDataset = os.path.join(self.dataFolder, file)
-                    self.data[file] = pd.read_csv(currDataset, index_col=0)
-                    if self.data[file].index.name is None:
-                        self.data[file].index.name = 'Index'
-                    self.data[file] = dup(self.data[file])
+                for file in tqdm(glob.glob(self.dataFolder+"/*.csv")):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                    dictname = os.path.basename(currDataset).replace('.csv','')
+                    self.data[dictname] = pd.read_csv(currDataset, index_col=0)
+                    if self.data[dictname].index.name is None:
+                        self.data[dictname].index.name = 'Index'
+                    self.data[dictname] = dup(self.data[dictname])
             else:
-                for name, file in tqdm(zip(dsNames, os.listdir(self.dataFolder))):
-                    currDataset = os.path.join(self.dataFolder, file)
+                for name, file in tqdm(zip(dsNames, glob.glob(self.dataFolder+"/*.csv"))):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
                     self.data[name] = pd.read_csv(currDataset, index_col=0)
                     if self.data[name].index.name is None:
                         self.data[name].index.name = 'Index'
