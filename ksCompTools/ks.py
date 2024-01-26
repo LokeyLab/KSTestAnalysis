@@ -19,6 +19,7 @@ import os
 import re
 import io
 import sys
+from tqdm.auto import tqdm
 
 
 def dup(seed, duplicate=True, ID='median'):
@@ -58,7 +59,7 @@ def calcKS(group, data, euc = True, forceCalc = False):
     groupIn = group
     test = []
 
-    for name, groups in sorted(groupIn.items(), key=lambda a: a[0]):
+    for name, groups in tqdm(sorted(groupIn.items(), key=lambda a: a[0])):
         currGroup = [currNames for currNames in groups if currNames in data.index]
         data_i = data[[*currGroup]]
         #print(name, groups, currGroup)
