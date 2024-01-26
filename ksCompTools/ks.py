@@ -1,5 +1,7 @@
-import ray
-ray.init(runtime_env={'env_vars': {'__MODIN_AUTOIMPORT_PANDAS__': '1'}})
+# import ray
+# ray.init(runtime_env={'env_vars': {'__MODIN_AUTOIMPORT_PANDAS__': '1'}})
+# matplotlib==3.7.1 matplotlib-inline==0.1.6 numpy==1.24.1 pandas==2.0.2 pandocfilters==1.5.0 scikit-learn==1.2.2 scipy==1.10.1 seaborn==0.12.2 statsmodels==0.14.0 streamlit==1.25.0 virtualenv==20.24.1 plotly==5.15.0 kaleido==0.2.1 modin[dask]
+
 
 import numpy as np
 import modin.pandas as pd
@@ -17,6 +19,7 @@ import os
 import re
 import io
 import sys
+from tqdm.auto import tqdm
 
 
 def dup(seed, duplicate=True, ID='median'):
@@ -56,7 +59,7 @@ def calcKS(group, data, euc = True, forceCalc = False):
     groupIn = group
     test = []
 
-    for name, groups in sorted(groupIn.items(), key=lambda a: a[0]):
+    for name, groups in tqdm(sorted(groupIn.items(), key=lambda a: a[0])):
         currGroup = [currNames for currNames in groups if currNames in data.index]
         data_i = data[[*currGroup]]
         #print(name, groups, currGroup)

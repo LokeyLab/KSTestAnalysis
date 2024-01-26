@@ -1,10 +1,20 @@
-import os, subprocess, io
+import os, subprocess, io, glob, pathlib, sys
+import tqdm.auto as tqdm
 from ksCompTools import *
 
 import pandas as pd, numpy as np, plotly as plt
 
+def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
+    # Convert the input to a Path object
+    path = pathlib.Path(file_path)
+   
+    # Check if the directory of the path exists, and if not, create it
+    path.mkdir(parents=True, exist_ok=True)
+
+    return path
+
 class KSProcessingCLI:
-    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: list = None):
+    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: list = None, pickle: bool = False,read_pickle: bool = False):
 
         #initializing data
         self.key = key
@@ -12,25 +22,47 @@ class KSProcessingCLI:
         self.exclude = exclude
         self.keyTargs = keyTargs
         self.data = {}
-
-        # parse data Folder
-        if dsNames is None:
-            for file in os.listdir(self.dataFolder):
-                currDataset = os.path.join(self.dataFolder, file)
-                self.data[file] = pd.read_csv(currDataset, index_col=0)
-                if self.data[file].index.name is None:
-                    self.data[file].index.name = 'Index'
-                self.data[file] = dup(self.data[file])
+                
+        if not read_pickle:
+            print(f"reading datafile from {self.dataFolder}",file=sys.stderr)
+            # parse data Folder
+            if dsNames is None:
+                for file in tqdm(glob.glob(self.dataFolder+"/*.csv")):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                    dictname = os.path.basename(currDataset).replace('.csv','')
+                    self.data[dictname] = pd.read_csv(currDataset, index_col=0)
+                    if self.data[dictname].index.name is None:
+                        self.data[dictname].index.name = 'Index'
+                    self.data[dictname] = dup(self.data[dictname])
+            else:
+                for name, file in tqdm(zip(dsNames, glob.glob(self.dataFolder+"/*.csv"))):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                    self.data[name] = pd.read_csv(currDataset, index_col=0)
+                    if self.data[name].index.name is None:
+                        self.data[name].index.name = 'Index'
+                    self.data[name] = dup(self.data[name])
+                    
+            self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
+            self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
+            
         else:
-            for name, file in zip(dsNames, os.listdir(self.dataFolder)):
-                currDataset = os.path.join(self.dataFolder, file)
-                self.data[name] = pd.read_csv(currDataset, index_col=0)
-                if self.data[name].index.name is None:
-                    self.data[name].index.name = 'Index'
-                self.data[name] = dup(self.data[name])
+            print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
+            # read pickled simMats from pickle folder inside data folder
+            # dsNames ignored, only use pickle names
+            self.datasetCorr = dict()
+            self.datasetDist = dict()
+            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.hd5")):
+                file = pickleFile.replace('.hd5','')
+                if file.endswith('_CorrMat'):
+                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_hdf(pickleFile,'corrDF')
+                elif file.endswith('_DistMat'):
+                    self.datasetDist[file.replace('_DistMat','')] = pd.read_hdf(pickleFile,'distDF')
 
-        self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
-        self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
+        if pickle:
+            picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
+            [corrDF.to_hdf(picklePath + f"{k}_CorrMat.hd5",key='corrDF',format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [distDF.to_hdf(picklePath + f"{k}_DistMat.hd5",key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            
         assert len(self.datasetCorr) == len(self.datasetDist)
 
         # determine groups
@@ -104,6 +136,9 @@ class CommandLine:
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
         self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
+        self.parser.add_argument('-rp','--read-pickle', action='store_true', default=False, help='use precomputed (and pickled) nxn similarity matrix pd.DataFrame instead of nxm DataFrame (found inside the pickles directory inside the dataset directory)\n'+\
+            "Also ignores '--name' parameter if provided")
+        self.parser.add_argument('-p','--pickle', action='store_true', default=False, help = 'pickle save the computed nxn similarity matrices in the datasets path (will generated pickles folder in dataset directory)')
 
         #args
         if inOpts is None:
@@ -123,7 +158,7 @@ def main(inOpts = None):
 
     key = pd.read_csv(keyFile, sep=',')
 
-    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name)
+    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
     ks.plotCalcData(outName=pdf, produceImg=prodImage)
