@@ -22,6 +22,19 @@ class KSProcessingCLI:
         self.exclude = exclude
         self.keyTargs = keyTargs
         self.data = {}
+        
+        # determine groups
+        self.groups = self.key[self.keyTargs[0]].value_counts(dropna=True, ascending=False)
+        self.groups = self.groups[self.groups > 3]
+        if self.exclude is not None:
+            self.groups = self.groups[~self.groups.index.isin(self.exclude)]
+        self.groups = list(self.groups.index)
+
+        #get final compounds and group ids
+        self.comps = self.key[[*self.keyTargs]]
+        self.comps = self.comps[self.comps.iloc[:,0].isin(self.groups)]
+        self.comps = self.comps.groupby(self.comps.iloc[:,0])[self.comps.columns[1]]
+        self.comps = {k: np.array(v) for k,v in self.comps}
                 
         if not read_pickle:
             print(f"reading datafile from {self.dataFolder}",file=sys.stderr)
@@ -41,10 +54,15 @@ class KSProcessingCLI:
                     if self.data[name].index.name is None:
                         self.data[name].index.name = 'Index'
                     self.data[name] = dup(self.data[name])
+            
+            # clear datasets of rows not present in the key
+            self.data = {data_name:df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())] for data_name,df in self.data.items()}
                     
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
             self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
             
+            # once the nxn correlation and distmats are computed
+            # OG dfs not needed, keep the df_names (keys)
             self.data = self.data.keys()
             
         else:
@@ -66,19 +84,6 @@ class KSProcessingCLI:
             [distDF.to_hdf(picklePath + f"{k}_DistMat.hd5",key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
-
-        # determine groups
-        self.groups = key[self.keyTargs[0]].value_counts(dropna=True, ascending=False)
-        self.groups = self.groups[self.groups > 3]
-        if self.exclude is not None:
-            self.groups = self.groups[~self.groups.index.isin(self.exclude)]
-        self.groups = list(self.groups.index)
-
-        #get final compounds and group ids
-        self.comps = key[[*self.keyTargs]]
-        self.comps = self.comps[self.comps.iloc[:,0].isin(self.groups)]
-        self.comps = self.comps.groupby(self.comps.iloc[:,0])[self.comps.columns[1]]
-        self.comps = {k: np.array(v) for k,v in self.comps}
 
         # generate useable dataets
         self.names = [k for k in sorted(self.datasetCorr.keys())]
@@ -133,7 +138,7 @@ class CommandLine:
         #arguments
         self.parser.add_argument('-k', '--keyFile', type=str, required=True, nargs='?', action='store', help='Key file (.csv)')
         self.parser.add_argument('-d', '--datasets', type=str, required=True, nargs='?', action='store', help='A path to a folder containing all the datasets (.csv)')
-        self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) IDs')
+        self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) rowIDs')
         self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which classes to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
