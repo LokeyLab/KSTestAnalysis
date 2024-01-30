@@ -45,6 +45,8 @@ class KSProcessingCLI:
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
             self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
             
+            self.data = self.data.keys()
+            
         else:
             print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
             # read pickled simMats from pickle folder inside data folder
