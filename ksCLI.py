@@ -14,7 +14,7 @@ def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
     return path
 
 class KSProcessingCLI:
-    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: list = None, pickle: bool = False,read_pickle: bool = False):
+    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: dict = None, pickle: bool = False,read_pickle: bool = False):
 
         #initializing data
         self.key = key
@@ -43,20 +43,28 @@ class KSProcessingCLI:
                 for file in tqdm(glob.glob(self.dataFolder+"/*.csv")):
                     currDataset = os.path.join(self.dataFolder, os.path.basename(file))
                     dictname = os.path.basename(currDataset).replace('.csv','')
+                    print(f"reading dataset {dictname}",file=sys.stderr)
                     self.data[dictname] = pd.read_csv(currDataset, index_col=0)
                     if self.data[dictname].index.name is None:
                         self.data[dictname].index.name = 'Index'
                     self.data[dictname] = dup(self.data[dictname])
+                    df = self.data[dictname]
+                    # clear datasets of rows not present in the key
+                    self.data[dictname] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())]
+                    del df
             else:
-                for name, file in tqdm(zip(dsNames, glob.glob(self.dataFolder+"/*.csv"))):
-                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                for name, file in tqdm(dsNames.items()):
+                    #, glob.glob(self.dataFolder+"/*.csv"))):
+                    currDataset = os.path.join(self.dataFolder,file)
+                    print(f"Reading dataset {file} as {name}",file=sys.stderr)
                     self.data[name] = pd.read_csv(currDataset, index_col=0)
                     if self.data[name].index.name is None:
                         self.data[name].index.name = 'Index'
                     self.data[name] = dup(self.data[name])
-            
-            # clear datasets of rows not present in the key
-            self.data = {data_name:df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())] for data_name,df in self.data.items()}
+                    df = self.data[name]
+                    # clear datasets of rows not present in the key
+                    self.data[name] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())]
+                    del df
                     
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
             self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
@@ -85,7 +93,7 @@ class KSProcessingCLI:
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
-        # generate useable dataets
+        # generate useable datasets
         self.names = [k for k in sorted(self.datasetCorr.keys())]
         self.datasetsCorrList = [v for k,v in sorted(self.datasetCorr.items(), key=lambda a:a[0])]
         self.datasetsDistList = [v for k,v in sorted(self.datasetDist.items(), key=lambda a:a[0])]
@@ -139,9 +147,9 @@ class CommandLine:
         self.parser.add_argument('-k', '--keyFile', type=str, required=True, nargs='?', action='store', help='Key file (.csv)')
         self.parser.add_argument('-d', '--datasets', type=str, required=True, nargs='?', action='store', help='A path to a folder containing all the datasets (.csv)')
         self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) rowIDs')
-        self.parser.add_argument('-e', '--exclude', required=False, default=None, nargs='+', action='store', help='a list of strings that define which classes to exclude')
+        self.parser.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
-        self.parser.add_argument('-n', '--name', required=False, type=str, nargs='+', action='store', default=None, help='Rename datasets in order of how they appear in your directory')
+        self.parser.add_argument('-n', '--name', required=False, type=argparse.FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
         self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
         self.parser.add_argument('-rp','--read-pickle', action='store_true', default=False, help='use precomputed (and pickled) nxn similarity matrix pd.DataFrame instead of nxm DataFrame (found inside the pickles directory inside the dataset directory)\n'+\
             "Also ignores '--name' parameter if provided")
@@ -159,13 +167,16 @@ def main(inOpts = None):
     keyFile = cl.args.keyFile
     dsFolder = cl.args.datasets
     keyTargs = cl.args.keyTarg
-    excludes = cl.args.exclude
     outFile = cl.args.outName
     prodImage = cl.args.image
+    if cl.arg.exclude is not None:
+        excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
+    if cl.args.name is not None:
+        dsNames = {k,v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
 
     key = pd.read_csv(keyFile, sep=',')
 
-    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
+    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
     ks.plotCalcData(outName=pdf, produceImg=prodImage)
