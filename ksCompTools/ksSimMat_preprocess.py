@@ -120,10 +120,14 @@ def main(inOpts = None):
     keyTargs = cl.args.keyTarg
     if cl.arg.exclude is not None:
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
+    else: excludes = cl.arg.exclude
     if cl.args.name is not None:
         dsNames = {k,v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
+    else: dsNames = cl.args.name
+        
+    key = pd.read_csv(keyFile, sep=',')
 
-    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=cl.args.name)
+    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
     ks.plotCalcData(outName=pdf, produceImg=prodImage)
