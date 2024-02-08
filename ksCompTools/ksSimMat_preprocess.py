@@ -47,14 +47,14 @@ class KSProcessingPreProcess:
                 self.data[dictname] = dup(self.data[dictname])
                 
                 generateCorr(self.data[dictname]).\
-                    to_hdf(picklePath + f"{dictname}_CorrMat.hd5",
+                    to_hdf(picklePath / f"{dictname}_CorrMat.hd5",
                            key='corrDF',
                            format='table',
                            complevel=9,
                            mode='w')
                     
                 generateEucDist(self.data[dictname]).\
-                    to_hdf(picklePath + f"{dictname}_DistMat.hd5",
+                    to_hdf(picklePath / f"{dictname}_DistMat.hd5",
                            key='distDF',
                            format='table',
                            complevel=9,
@@ -70,14 +70,14 @@ class KSProcessingPreProcess:
                 self.data[name] = dup(self.data[name])
                 
                 generateCorr(self.data[name]).\
-                    to_hdf(picklePath + f"{name}_CorrMat.hd5",
+                    to_hdf(os.path.join(picklePath , f"{name}_CorrMat.hd5"),
                            key='corrDF',
                            format='table',
                            complevel=9,
                            mode='w')
                     
                 generateEucDist(self.data[name]).\
-                    to_hdf(picklePath + f"{name}_DistMat.hd5",
+                    to_hdf(os.path.join(picklePath , f"{name}_DistMat.hd5"),
                            key='distDF',
                            format='table',
                            complevel=9,

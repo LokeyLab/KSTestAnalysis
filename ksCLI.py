@@ -88,8 +88,8 @@ class KSProcessingCLI:
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
-            [corrDF.to_hdf(picklePath + f"{k}_CorrMat.hd5",key='corrDF',format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
-            [distDF.to_hdf(picklePath + f"{k}_DistMat.hd5",key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            [corrDF.to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),key='corrDF',format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [distDF.to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
