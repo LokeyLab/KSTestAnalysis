@@ -140,7 +140,7 @@ class CommandLine:
             description='CLI version of KSTestApp program',
             prefix_chars='-',
             add_help=True,
-            usage='python3 ksCLI.py -k <.csv file> -d <FOLDER containing datasets> -kt <list of header strings of key columns> -e <list of classes to exclue>'
+            usage='python3 ksCLI.py -k <.csv file> -d <FOLDER containing datasets> -kt <list of header strings of key columns> -e <list file of classes to exclude>'
         )
 
         #arguments
@@ -173,11 +173,12 @@ def main(inOpts = None):
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
     else: excludes = cl.args.exclude
     if cl.args.name is not None:
-        dsNames = {k:v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
+        dsNames = {k:v for k,v in [x.strip().split('\t') for x in cl.args.name.readlines()]}
     else: dsNames = cl.args.name
     
     key = pd.read_csv(keyFile, sep=',')
-
+    # print(excludes)
+    # exit(0)
     ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
