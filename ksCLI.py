@@ -173,7 +173,7 @@ def main(inOpts = None):
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
     else: excludes = cl.arg.exclude
     if cl.args.name is not None:
-        dsNames = {k,v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
+        dsNames = {k:v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
     else: dsNames = cl.args.name
     
     key = pd.read_csv(keyFile, sep=',')
