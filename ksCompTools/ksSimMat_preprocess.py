@@ -129,14 +129,6 @@ def main(inOpts = None):
 
     ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames)
     
-    pdf = f'{outFile}ecdfGraphs.pdf'
-    ks.plotCalcData(outName=pdf, produceImg=prodImage)
-    pearson, euc = ks.generatePVals()
-
-    pearson.to_csv(f'{outFile}Pearson.csv', sep =',')
-    euc.to_csv(f'{outFile}Euc.csv', sep =',')
-
-    ks.plotPVals(pearson=pearson, euc=euc, outName=outFile, width=1080, height=720)
 
 if __name__ == '__main__':
     main()
