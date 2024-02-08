@@ -134,7 +134,7 @@ class KSProcessingCLI:
 
 class CommandLine:
     def __init__(self, inOpts = None):
-        from argparse import ArgumentParser
+        from argparse import ArgumentParser, FileType
 
         self.parser = ArgumentParser(
             description='CLI version of KSTestApp program',
@@ -149,7 +149,7 @@ class CommandLine:
         self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) rowIDs')
         self.parser.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
-        self.parser.add_argument('-n', '--name', required=False, type=argparse.FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
+        self.parser.add_argument('-n', '--name', required=False, type=FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
         self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
         self.parser.add_argument('-rp','--read-pickle', action='store_true', default=False, help='use precomputed (and pickled) nxn similarity matrix pd.DataFrame instead of nxm DataFrame (found inside the pickles directory inside the dataset directory)\n'+\
             "Also ignores '--name' parameter if provided")
@@ -169,9 +169,9 @@ def main(inOpts = None):
     keyTargs = cl.args.keyTarg
     outFile = cl.args.outName
     prodImage = cl.args.image
-    if cl.arg.exclude is not None:
+    if cl.args.exclude is not None:
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
-    else: excludes = cl.arg.exclude
+    else: excludes = cl.args.exclude
     if cl.args.name is not None:
         dsNames = {k:v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
     else: dsNames = cl.args.name

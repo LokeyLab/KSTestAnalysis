@@ -85,7 +85,7 @@ class KSProcessingPreProcess:
         
 class CommandLine:
     def __init__(self, inOpts = None):
-        from argparse import ArgumentParser
+        from argparse import ArgumentParser, FileType
 
         self.parser = ArgumentParser(
             description='CLI preProcessor for KSTestApp program',
@@ -96,7 +96,7 @@ class CommandLine:
 
         #arguments
         self.parser.add_argument('-d', '--datasets', type=str, required=True, nargs='?', action='store', help='A path to a folder containing all the datasets (.csv)')
-        self.parser.add_argument('-n', '--name', required=False, type=argparse.FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
+        self.parser.add_argument('-n', '--name', required=False, type=FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
         self.parser.add_argument('-k', '--keyFile', type=str, required=False, nargs='?', action='store', help='Key file (.csv)')
         self.parser.add_argument('-kt', '--keyTarg', required=False, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) rowIDs')
         self.parser.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
@@ -118,9 +118,9 @@ def main(inOpts = None):
     keyFile = cl.args.keyFile
     dsFolder = cl.args.datasets
     keyTargs = cl.args.keyTarg
-    if cl.arg.exclude is not None:
+    if cl.args.exclude is not None:
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
-    else: excludes = cl.arg.exclude
+    else: excludes = cl.args.exclude
     if cl.args.name is not None:
         dsNames = {k,v for k,v in [x.strip().split('\t') for x in open(cl.args.name,'r').readlines()]}
     else: dsNames = cl.args.name
