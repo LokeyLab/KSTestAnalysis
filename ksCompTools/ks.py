@@ -23,9 +23,9 @@ from tqdm.auto import tqdm
 
 
 def dup(seed, duplicate=True, ID='median'):
-    #print('Removing Duplicates', file=sys.stderr)
+    print('Removing Duplicates', file=sys.stderr)
     
-    #print(seed.shape, file=sys.stderr)
+    print(seed.shape, file=sys.stderr)
     if ID == 'median':
         df = seed.groupby(seed.index.name).median().reset_index()
     elif ID =='mean':
@@ -40,7 +40,7 @@ def dup(seed, duplicate=True, ID='median'):
     df.set_index(seedIndex, inplace=True)
     df = df.iloc[:,1:]
 
-    #print(df.shape, file=sys.stderr)
+    print("RETURING FROM dup TO CALL WITH DF:",df.shape, file=sys.stderr)
     return df
 
 def generateEucDist(df: pd.DataFrame):
@@ -120,15 +120,18 @@ def generateECDF(pearsonData: list, eucData: list, groups: dict, names: list, fo
                     for x, y in sorted(zip(eucData, names), key=lambda a: a[1])]
     
     # if there are any problems, then check the arrays with nan
+    print("RETURNING TO CALL FROM generateECDF: lengths of return are:", len(pearsonObjs),len(eucObjs),file=sys.stderr)
     return pearsonObjs, eucObjs
 
 def plotData(pearsonData: list, eucData: list, groups: dict, names: list, pdfName, produceImg = True, forcePlot = False):
     assert len(pearsonData) == len(eucData) and len(names) == len(eucData)
+    print("INSIDE ks.py/plotData:", len(pearsonData),len(eucData),file=sys.stderr,end="\n\n")
     pearsonObjs, eucObjs = generateECDF(pearsonData=pearsonData, eucData=eucData, groups=groups, names=names)
                     
     # Each calcKS obj contains: name, p, lims, ecdf for data_i, ecdf for fBk
     if produceImg:
         try:
+            print(pearsonObjs,file=sys.stderr)
             assert len(pearsonObjs) == len(eucObjs) and len(pearsonObjs[0][1]) == len(eucObjs[-1][1])
         except:
             print(len(pearsonObjs), len(eucObjs), len(pearsonObjs[0][1]), len(eucObjs[-1][1]))

@@ -13,6 +13,87 @@ def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
 
     return path
 
+def wideDf_to_hdf(filename, data, columns=None, maxColSize=2000, **kwargs):
+    """Write a `pandas.DataFrame` with a large number of columns
+    to one HDFStore. From: https://stackoverflow.com/a/51931059
+
+    Parameters
+    -----------
+    filename : str
+        name of the HDFStore
+    data : pandas.DataFrame
+        data to save in the HDFStore
+    columns: list
+        a list of columns for storing. If set to `None`, all 
+        columns are saved.
+    maxColSize : int (default=2000)
+        this number defines the maximum possible column size of 
+        a table in the HDFStore.
+
+    """
+    import numpy as np
+    from collections import ChainMap
+    store = pd.HDFStore(filename, **kwargs)
+    if columns is None:
+        columns = data.columns
+    colSize = columns.shape[0]
+    if colSize > maxColSize:
+        numOfSplits = np.ceil(colSize / maxColSize).astype(int)
+        colsSplit = [
+            columns[i * maxColSize:(i + 1) * maxColSize]
+            for i in range(numOfSplits)
+        ]
+        _colsTabNum = ChainMap(*[
+            dict(zip(columns, ['data{}'.format(num)] * colSize))
+            for num, columns in enumerate(colsSplit)
+        ])
+        colsTabNum = pd.Series(dict(_colsTabNum)).sort_index()
+        for num, cols in enumerate(colsSplit):
+            store.put('data{}'.format(num), data[cols], format='table')
+        store.put('colsTabNum', colsTabNum, format='fixed')
+    else:
+        store.put('data', data[columns], format='table')
+    store.close()
+
+def read_hdf_wideDf(filename, columns=None, **kwargs):
+    """Read a `pandas.DataFrame` from a HDFStore.
+    From: https://stackoverflow.com/a/51931059
+
+    Parameter
+    ---------
+    filename : str
+        name of the HDFStore
+    columns : list
+        the columns in this list are loaded. Load all columns, 
+        if set to `None`.
+
+    Returns
+    -------
+    data : pandas.DataFrame
+        loaded data.
+
+    """
+    store = pd.HDFStore(filename)
+    data = []
+    colsTabNum = store.select('colsTabNum')
+    if colsTabNum is not None:
+        if columns is not None:
+            tabNums = pd.Series(
+                index=colsTabNum[columns].values,
+                data=colsTabNum[columns].data).sort_index()
+            for table in tabNums.unique():
+                data.append(
+                    store.select(table, columns=tabsNum[table], **kwargs))
+        else:
+            for table in colsTabNum.unique():
+                data.append(store.select(table, **kwargs))
+        data = pd.concat(data, axis=1).sort_index(axis=1)
+    else:
+        data = store.select('data', columns=columns)
+    store.close()
+    return data
+
+
 class KSProcessingCLI:
     def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: dict = None, pickle: bool = False,read_pickle: bool = False):
 
@@ -35,43 +116,51 @@ class KSProcessingCLI:
         self.comps = self.comps[self.comps.iloc[:,0].isin(self.groups)]
         self.comps = self.comps.groupby(self.comps.iloc[:,0])[self.comps.columns[1]]
         self.comps = {k: np.array(v) for k,v in self.comps}
-                
+
+        #print("CompoundClass to compoundID groups:",self.comps,file=sys.stderr)
+        #print("inputs are:",read_pickle,dsNames, self.data,self.exclude,self.dataFolder,file=sys.stderr)
         if not read_pickle:
             print(f"reading datafile from {self.dataFolder}",file=sys.stderr)
             # parse data Folder
             if dsNames is None:
-                for file in tqdm(glob.glob(self.dataFolder+"/*.csv")):
-                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                print(f"No dsNames provided, using filenames: {glob.glob(self.dataFolder+'/*.csv')}",file=sys.stderr)
+                for f in tqdm(glob.glob(self.dataFolder+"/*.csv")):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(f))
                     dictname = os.path.basename(currDataset).replace('.csv','')
                     print(f"reading dataset {dictname}",file=sys.stderr)
                     self.data[dictname] = pd.read_csv(currDataset, index_col=0)
                     if self.data[dictname].index.name is None:
                         self.data[dictname].index.name = 'Index'
+                    print(f"PRE DEDUP DATA SHAPE: {self.data[dictname].shape}",file=sys.stderr)
                     self.data[dictname] = dup(self.data[dictname])
                     df = self.data[dictname]
+                    print(f"FINISHED READING AND DUP ON {dictname}, dataset shape is {df.shape}",file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[dictname] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())]
+                    self.data[dictname] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
                     del df
             else:
-                for name, file in tqdm(dsNames.items()):
+                print(f"dsNames provided. they are: {dsNames}",file=sys.stderr)
+                for name, f in tqdm(dsNames.items()):
                     #, glob.glob(self.dataFolder+"/*.csv"))):
-                    currDataset = os.path.join(self.dataFolder,file)
+                    currDataset = os.path.join(self.dataFolder,f)
                     print(f"Reading dataset {file} as {name}",file=sys.stderr)
                     self.data[name] = pd.read_csv(currDataset, index_col=0)
                     if self.data[name].index.name is None:
                         self.data[name].index.name = 'Index'
+                    print(f"PRE DEDUP DATA SHAPE: {self.data[name].shape}",file=sys.stderr)
                     self.data[name] = dup(self.data[name])
                     df = self.data[name]
+                    print(f'FINISHED READING AND DUP ON {name}, dataset shape is {df.shape}',file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[name] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())]
+                    self.data[name] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
                     del df
-                    
+            print("FINISHED READING FROM FILE: length of datasets collected:",len(self.data),file=sys.stderr)        
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
             self.datasetDist = {k:generateEucDist(v) for k,v in self.data.items()}
             
             # once the nxn correlation and distmats are computed
             # OG dfs not needed, keep the df_names (keys)
-            self.data = self.data.keys()
+            #self.data = self.data.keys()
             
         else:
             print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
@@ -82,14 +171,16 @@ class KSProcessingCLI:
             for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.hd5")):
                 file = pickleFile.replace('.hd5','')
                 if file.endswith('_CorrMat'):
-                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_hdf(pickleFile,'corrDF')
+                    self.datasetCorr[file.replace('_CorrMat','')] = read_hdf_wideDf(pickleFile)#,'corrDF')
                 elif file.endswith('_DistMat'):
-                    self.datasetDist[file.replace('_DistMat','')] = pd.read_hdf(pickleFile,'distDF')
+                    self.datasetDist[file.replace('_DistMat','')] = read_hdf_wideDf(pickleFile)#,'distDF')
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
-            [corrDF.to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),key='corrDF',format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
-            [distDF.to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),key='distDF',format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            #key='corrDF'
+            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            #key='distDF'
+            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
@@ -97,6 +188,8 @@ class KSProcessingCLI:
         self.names = [k for k in sorted(self.datasetCorr.keys())]
         self.datasetsCorrList = [v for k,v in sorted(self.datasetCorr.items(), key=lambda a:a[0])]
         self.datasetsDistList = [v for k,v in sorted(self.datasetDist.items(), key=lambda a:a[0])]
+
+        print("n x n pairwise distmats calc'd. length of dataset lists:", len(self.names),len(self.datasetCorr),len(self.datasetDist),file=sys.stderr)
 
         # plotting Data
         self.pearsonECDF = None
@@ -177,8 +270,8 @@ def main(inOpts = None):
     else: dsNames = cl.args.name
     
     key = pd.read_csv(keyFile, sep=',')
-    # print(excludes)
-    # exit(0)
+    print(excludes, cl.args,file=sys.stderr)
+    #exit(0)
     ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
