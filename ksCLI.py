@@ -143,7 +143,7 @@ class KSProcessingCLI:
                 for name, f in tqdm(dsNames.items()):
                     #, glob.glob(self.dataFolder+"/*.csv"))):
                     currDataset = os.path.join(self.dataFolder,f)
-                    print(f"Reading dataset {file} as {name}",file=sys.stderr)
+                    print(f"Reading dataset {f} as {name}",file=sys.stderr)
                     self.data[name] = pd.read_csv(currDataset, index_col=0)
                     if self.data[name].index.name is None:
                         self.data[name].index.name = 'Index'
@@ -260,7 +260,7 @@ def main(inOpts = None):
     keyFile = cl.args.keyFile
     dsFolder = cl.args.datasets
     keyTargs = cl.args.keyTarg
-    outFile = cl.args.outName
+    outFile = ensure_path_exists(cl.args.outName)
     prodImage = cl.args.image
     if cl.args.exclude is not None:
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
