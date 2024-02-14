@@ -178,9 +178,11 @@ class KSProcessingCLI:
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
             #key='corrDF'
-            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            # [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.pkl.gz"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
             #key='distDF'
-            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            # [wideDf_to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            [distDF.to_pickle(os.path.join(picklePath , f"{k}_DistMat.pkl.gz"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
