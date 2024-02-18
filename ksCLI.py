@@ -15,7 +15,7 @@ def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
 
 def wideDf_to_hdf(filename, data, columns=None, maxColSize=2000, **kwargs):
     """Write a `pandas.DataFrame` with a large number of columns
-    to one HDFStore. From: https://stackoverflow.com/a/51931059
+    to one HDFStore.
 
     Parameters
     -----------
@@ -57,7 +57,6 @@ def wideDf_to_hdf(filename, data, columns=None, maxColSize=2000, **kwargs):
 
 def read_hdf_wideDf(filename, columns=None, **kwargs):
     """Read a `pandas.DataFrame` from a HDFStore.
-    From: https://stackoverflow.com/a/51931059
 
     Parameter
     ---------
@@ -168,21 +167,19 @@ class KSProcessingCLI:
             # dsNames ignored, only use pickle names
             self.datasetCorr = dict()
             self.datasetDist = dict()
-            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.hd5")):
-                file = pickleFile.replace('.hd5','')
+            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl.gz")):
+                file = pickleFile.replace('.pkl.gz','')
                 if file.endswith('_CorrMat'):
-                    self.datasetCorr[file.replace('_CorrMat','')] = read_hdf_wideDf(pickleFile)#,'corrDF')
+                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_pickle(pickleFile)
                 elif file.endswith('_DistMat'):
-                    self.datasetDist[file.replace('_DistMat','')] = read_hdf_wideDf(pickleFile)#,'distDF')
+                    self.datasetDist[file.replace('_DistMat','')] = pd.read_pickle(pickleFile)
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
             #key='corrDF'
-            # [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
-            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.pkl.gz"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [corrDF.to_pickle(os.path.join(picklePath , f"{k}_CorrMat.pkl.gz"),compression={'method':'gzip','compresslevel':9}) for k,corrDF in tqdm(self.datasetCorr.items())]
             #key='distDF'
-            # [wideDf_to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
-            [distDF.to_pickle(os.path.join(picklePath , f"{k}_DistMat.pkl.gz"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            [distDF.to_pickle(os.path.join(picklePath , f"{k}_DistMat.pkl.gz"),compression={'method':'gzip','compresslevel':9}) for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
@@ -219,7 +216,7 @@ class KSProcessingCLI:
         self.pearsonECDF, self.euclideanECDF = plotData(pearsonData=self.datasetsCorrList, eucData=self.datasetsDistList, groups=self.comps, names=self.names, pdfName=outName, produceImg=produceImg)
     
     def generatePVals(self):
-        pearson, euc = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
+        euc, pearson = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
         return pearson, euc
     
     def plotPVals(self, pearson, euc, outName, **kwargs):
