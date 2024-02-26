@@ -140,7 +140,12 @@ class KSProcessingCLI:
                     df = self.data[dictname]
                     print(f"FINISHED READING AND DUP ON {dictname}, dataset shape is {df.shape}",file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[dictname] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    nanAfflicted = df.loc[df.isna().sum(axis=0)>0.2*df.shape[1]].index.to_list()
+                    if len(nanAfflicted)>0:
+                        print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
+                        df.drop(index=nanAfflicted,inplace=True)
+                    self.data[dictname] = df
                     del df
             else:
                 print(f"dsNames provided. they are: {dsNames}",file=sys.stderr)
@@ -156,7 +161,12 @@ class KSProcessingCLI:
                     df = self.data[name]
                     print(f'FINISHED READING AND DUP ON {name}, dataset shape is {df.shape}',file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[name] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    nanAfflicted = df.loc[df.isna().sum(axis=0)>0.2*df.shape[1]].index.to_list()
+                    if len(nanAfflicted)>0:
+                        print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
+                        df.drop(index=nanAfflicted,inplace=True)
+                    self.data[name] = df
                     del df
             print("FINISHED READING FROM FILE: length of datasets collected:",len(self.data),file=sys.stderr)        
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
@@ -223,6 +233,8 @@ class KSProcessingCLI:
     
     def generatePVals(self):
         euc, pearson = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
+        euc['keyGroupSize'] = [len(self.comps[x]) for x in euc.index]
+        pearson['keyGroupSize'] = [len(self.comps[x] for x in pearson.index]
         return pearson, euc
     
     def plotPVals(self, pearson, euc, outName, **kwargs):

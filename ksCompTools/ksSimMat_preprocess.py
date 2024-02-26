@@ -6,12 +6,13 @@ import sys
 
 from tqdm.auto import tqdm
 import numpy as np
-import modin.pandas as pd
+# import modin.pandas as pd
+from ks import *
+import pandas as pd
 
 from scipy.stats import kstest as kstest
 from scipy.spatial.distance import pdist, squareform
 
-from ks import *
 
 def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
     # Convert the input to a Path object
@@ -22,8 +23,31 @@ def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
 
     return path
 
+def findNaNs (simMat: pd.DataFrame = None,simMat_path: str =None) -> dict:
+    nanOffenders = dict()
+    if simMat is None and simMat_path is not None:
+        simMat = pd.read_pickle(simMat_path)
+    elif simMat is not None and simMat_path is None:
+        simMat = simMat
+    print("Full simMat Shape:", simMat.shape,file=sys.stderr)
+    print("SimMat dropna Shape:", simMat.dropna().shape,file=sys.stderr)
+    naCounts = simMat.isna().sum(axis=1)
+    afflicted = simMat.loc[simMat.isna().sum(axis=1)>0].index.to_list()
+    print("number of afflicted nan columns:",len(afflicted),file=sys.stderr)
+    for aff in afflicted:
+        for i in simMat[aff].isna().argsort()[::-1][:naCounts[aff]].index:
+            # print(i)
+            if i not in nanOffenders:
+                nanOffenders[i] =1
+            elif i in nanOffenders:
+                nanOffenders[i] +=1
+    nanOffs = pd.Series(nanOffenders)
+    nanOffs = naCounts.index[(pd.Series(nanOffs) - naCounts)>0].to_list()
+    nanOffenders = {k:v for k,v in nanOffenders.items() if k in nanOffs}
+    return nanOffenders
+
 class KSProcessingPreProcess:
-    def __init__(self, dataFolder: str, dsNames: dict = None, key: pd.DataFrame = None, keyTargs: list = None, include: list = None, min_group_size: int = 3):
+    def __init__(self, dataFolder: str, dsNames: dict = None, key: pd.DataFrame = None, keyTargs: list = None, exclude:list = None, include: list = None, min_group_size: int = 3):
         
         #initializing data
         self.key = key
@@ -41,6 +65,8 @@ class KSProcessingPreProcess:
                 self.groups = self.groups[self.groups.index.isin(self.include)]
             elif self.exclude is not None and self.include is None:
                 self.groups = self.groups[~self.groups.index.isin(self.exclude)]
+            elif self.exclude is None and self.include is None:
+                pass
             else:
                 print(f"INCLUDE AND EXCLUDE OPTIONS ARE MUTUALLY EXCLUSIVE.\n PROVIDE ON OR THE OTHER, NOT BOTH.",file=sys.stderr)
             self.groups = list(self.groups.index)
@@ -50,6 +76,9 @@ class KSProcessingPreProcess:
             self.comps = self.comps[self.comps.iloc[:,0].isin(self.groups)]
             self.comps = self.comps.groupby(self.comps.iloc[:,0])[self.comps.columns[1]]
             self.comps = {k: np.array(v) for k,v in self.comps}
+            print({k:len(v) for k,v in self.comps.items()},file=sys.stderr)
+            comps_expanded = list()
+            [comps_expanded.extend(c) for c in self.comps.values()]
         
         picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
         
@@ -67,26 +96,33 @@ class KSProcessingPreProcess:
                 print(f"PRE DEDUP DATA SHAPE: {self.data[dictname].shape}",file=sys.stderr)
                 self.data[dictname] = dup(self.data[dictname])
                 print(f"FINISHED READING AND DUP ON {dictname}, dataset shape is {self.data[dictname].shape}",file=sys.stderr)
+                # self.data[dictname].dropna(axis='index',how='any',inplace=True)
                 
-                if key is not None:
+                if self.comps:
                     print(f"Prefiltering index with key {key}.",file=sys.stderr)
-                    print(f"Keeping target groups: {self.groups}",file=sys.stderr)
+                    print(f"Keeping target groups: {sorted(self.groups)}",file=sys.stderr)
                     # clear datasets of rows not present in the key
+                    # comps_expanded = list()
+                    # [comps_expanded.extend(c) for c in self.comps.values()]
                     self.data[dictname] = self.data[dictname].loc[\
                         self.data[dictname].index.isin(\
-                            self.key[self.keyTargs[1]].to_list())].copy()
-                    
-                generateCorr(self.data[dictname]).to_pickle(\
+                            comps_expanded)].copy()
+                
+                print(f"CALCULATING SIMILARITY MATRIX FOR {dictname}, will purge any pairwise  with nan") 
+                cor = generateCorr(self.data[dictname])
+                cor.drop(index=findNaNs(cor).keys(),inplace=True)
+                cor.to_pickle(\
                     os.path.join(picklePath ,f"{dictname}_CorrMat.pkl.gz"),
                               compression={'method':'gzip','compresslevel':9}
                               )
                     
-                generateEucDist(self.data[dictname]).to_pickle(\
+                euc = generateEucDist(self.data[dictname])
+                euc.drop(index=findNaNs(euc).keys(),inplace=True)
+                euc.to_pickle(\
                     os.path.join(picklePath , f"{dictname}_DistMat.pkl.gz"),
                     compression={'method':'gzip','compresslevel':9}
                     )
-                print(f"Finished calculating and Pickling dataset: {dictname} with dimesions: {self.data[dictname].shape}",file=sys.stderr)
-                
+                print(f"Finished calculating and Pickling dataset: {dictname} with dimesions: {self.data[dictname].shape}",file=sys.stderr)          
         else:
             print(f"dsNames provided. they are: {dsNames}",file=sys.stderr)
             for name, f in tqdm(dsNames.items()):
@@ -99,27 +135,31 @@ class KSProcessingPreProcess:
                 self.data[name] = dup(self.data[name])
                 print(f'FINISHED READING AND DUP ON {name}, dataset shape is {self.data[name].shape}',file=sys.stderr)
                 
-                if key is not None:
-                    print(f"Prefiltering index with key {key}.",file=sys.stderr)
-                    print(f"Keeping target groups: {self.groups}",file=sys.stderr)
+                if self.comps:
+                    print(f"Prefiltering index with key \n{key}.",file=sys.stderr)
+                    print(f"Keeping target groups: {sorted(self.groups)}",file=sys.stderr)
                     # clear datasets of rows not present in the key
+                    # print(self.data[name].shape,
+                        #   self.data[name].index,
+                        #   len(comps_expanded),
+                        #   self.key.shape, len(self.comps))
                     self.data[name] = self.data[name].loc[\
                         self.data[name].index.isin(\
-                            self.key[self.keyTargs[1]].to_list())].copy()
-                
-                generateCorr(self.data[name]).to_pickle(\
+                            comps_expanded)].copy()
+                    # sys.exit(0)
+                generateCorr(self.data[name]).to_pickle(
                     os.path.join(picklePath ,f"{name}_CorrMat.pkl.gz"),
                               compression={'method':'gzip','compresslevel':9}
                               )
                     
-                generateEucDist(self.data[name]).to_pickle(\
+                generateEucDist(self.data[name]).to_pickle(
                     os.path.join(picklePath , f"{name}_DistMat.pkl.gz"),
                     compression={'method':'gzip','compresslevel':9}
                     )
                 print(f"Finished calculating and Pickling dataset: {name} with dimesions: {self.data[name].shape}",file=sys.stderr)
                 
         print("FINISHED READING FROM FILE: length of datasets collected:",len(self.data),file=sys.stderr)
-                
+    
                 
 class CommandLine:
     def __init__(self, inOpts = None):
@@ -170,9 +210,9 @@ def main(inOpts = None):
     else: dsNames = cl.args.name
         
     key = pd.read_csv(keyFile, sep=',')
-    # print(excludes, dsNames,cl.args)
+    print(excludes, dsNames,cl.args)
     # exit(0)
-    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames,include=includes,min_group_size=cl.args.min_group_size)
+    ks = KSProcessingPreProcess(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames,include=includes,min_group_size=cl.args.min_group_size)
     
 
 if __name__ == '__main__':
