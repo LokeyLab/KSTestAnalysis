@@ -92,6 +92,28 @@ def read_hdf_wideDf(filename, columns=None, **kwargs):
     store.close()
     return data
 
+def findNaNs (simMat: pd.DataFrame = None,simMat_path: str =None) -> dict:
+    nanOffenders = dict()
+    if simMat is None and simMat_path is not None:
+        simMat = pd.read_pickle(simMat_path)
+    elif simMat is not None and simMat_path is None:
+        simMat = simMat
+    print("Full simMat Shape:", simMat.shape,file=sys.stderr)
+    print("SimMat dropna Shape:", simMat.dropna().shape,file=sys.stderr)
+    naCounts = simMat.isna().sum(axis=1)
+    afflicted = simMat.loc[simMat.isna().sum(axis=1)>0].index.to_list()
+    print("number of afflicted nan columns:",len(afflicted),file=sys.stderr)
+    for aff in afflicted:
+        for i in simMat[aff].isna().argsort()[::-1][:naCounts[aff]].index:
+            # print(i)
+            if i not in nanOffenders:
+                nanOffenders[i] =1
+            elif i in nanOffenders:
+                nanOffenders[i] +=1
+    nanOffs = pd.Series(nanOffenders)
+    nanOffs = naCounts.index[(pd.Series(nanOffs) - naCounts)>0].to_list()
+    nanOffenders = {k:v for k,v in nanOffenders.items() if k in nanOffs}
+    return nanOffenders
 
 class KSProcessingCLI:
     def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, include: list = None, dsNames: dict = None, pickle: bool = False,read_pickle: bool = False,min_group_size: int =3):
@@ -162,7 +184,7 @@ class KSProcessingCLI:
                     print(f'FINISHED READING AND DUP ON {name}, dataset shape is {df.shape}',file=sys.stderr)
                     # clear datasets of rows not present in the key
                     df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
-                    nanAfflicted = df.loc[df.isna().sum(axis=0)>0.2*df.shape[1]].index.to_list()
+                    nanAfflicted = df.loc[df.isna().sum(axis=1)>0.2*df.shape[1]].index.to_list()
                     if len(nanAfflicted)>0:
                         print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
                         df.drop(index=nanAfflicted,inplace=True)
@@ -174,7 +196,7 @@ class KSProcessingCLI:
             
             # once the nxn correlation and distmats are computed
             # OG dfs not needed, keep the df_names (keys)
-            #self.data = self.data.keys()
+            self.data = self.data.keys()
             
         else:
             print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
@@ -186,9 +208,13 @@ class KSProcessingCLI:
             for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl.gz")):
                 file = pickleFile.replace('.pkl.gz','')
                 if file.endswith('_CorrMat'):
-                    self.datasetCorr[file.replace('_CorrMat','')] = pd.read_pickle(pickleFile)
+                    cor = pd.read_pickle(pickleFile)
+                    cor.drop(index=findNaNs(cor).keys(),inplace=True)
+                    self.datasetCorr[file.replace('_CorrMat','')] = cor
                 elif file.endswith('_DistMat'):
-                    self.datasetDist[file.replace('_DistMat','')] = pd.read_pickle(pickleFile)
+                    dist = pd.read_pickle(pickleFile)
+                    dist.drop(index=findNaNs(dist).keys(),inplace=True)
+                    self.datasetDist[file.replace('_DistMat','')] = dist
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
@@ -234,7 +260,7 @@ class KSProcessingCLI:
     def generatePVals(self):
         euc, pearson = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
         euc['keyGroupSize'] = [len(self.comps[x]) for x in euc.index]
-        pearson['keyGroupSize'] = [len(self.comps[x] for x in pearson.index]
+        pearson['keyGroupSize'] = [len(self.comps[x]) for x in pearson.index]
         return pearson, euc
     
     def plotPVals(self, pearson, euc, outName, **kwargs):

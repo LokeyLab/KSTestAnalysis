@@ -3,8 +3,10 @@ import re
 import io
 import pathlib
 import sys
+import itertools
 
 from tqdm.auto import tqdm
+from concurrent import futures
 import numpy as np
 # import modin.pandas as pd
 from ks import *
@@ -47,7 +49,7 @@ def findNaNs (simMat: pd.DataFrame = None,simMat_path: str =None) -> dict:
     return nanOffenders
 
 class KSProcessingPreProcess:
-    def __init__(self, dataFolder: str, dsNames: dict = None, key: pd.DataFrame = None, keyTargs: list = None, exclude:list = None, include: list = None, min_group_size: int = 3):
+    def __init__(self, dataFolder: str, dsNames: dict = None, key: pd.DataFrame = None, keyTargs: list = None, exclude:list = None, include: list = None, min_group_size: int = 3,parallel:bool = False):
         
         #initializing data
         self.key = key
@@ -55,6 +57,7 @@ class KSProcessingPreProcess:
         self.exclude = exclude
         self.include = include
         self.keyTargs = keyTargs
+        self.dsNames = dsNames
         self.data = {}
         
         if self.key is not None and self.keyTargs is not None:
@@ -77,14 +80,32 @@ class KSProcessingPreProcess:
             self.comps = self.comps.groupby(self.comps.iloc[:,0])[self.comps.columns[1]]
             self.comps = {k: np.array(v) for k,v in self.comps}
             print({k:len(v) for k,v in self.comps.items()},file=sys.stderr)
-            comps_expanded = list()
-            [comps_expanded.extend(c) for c in self.comps.values()]
+            self.comps_expanded = list()
+            [self.comps_expanded.extend(c) for c in self.comps.values()]
+        self.picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
         
-        picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
+        if parallel:
+            exec_list = list()
+            if self.dsNames is None:
+                print(f"No dsNames provided, using filenames: {glob.glob(self.dataFolder+'/*.csv')}",file=sys.stderr)
+                for f in tqdm(glob.glob(self.dataFolder+"/*.csv")):
+                    currDataset = os.path.join(self.dataFolder, os.path.basename(file))
+                    dictname = os.path.basename(currDataset).replace('.csv','')
+                    exec_list.append((dictname,f))
+            else:
+                print(f"dsNames provided. they are: {self.dsNames}",file=sys.stderr)
+                for name, f in tqdm(self.dsNames.items()):
+                    exec_list.append((name,f))
+            self._exec_parallel(exec_list)
+        
+        else:
+            self._single_thread()
+    
+    def _single_thread(self):
         
         print(f"reading datafiles from {self.dataFolder}",file=sys.stderr)
         # parse data Folder
-        if dsNames is None:
+        if self.dsNames is None:
             print(f"No dsNames provided, using filenames: {glob.glob(self.dataFolder+'/*.csv')}",file=sys.stderr)
             for f in tqdm(glob.glob(self.dataFolder+"/*.csv")):
                 currDataset = os.path.join(self.dataFolder, os.path.basename(file))
@@ -99,7 +120,7 @@ class KSProcessingPreProcess:
                 # self.data[dictname].dropna(axis='index',how='any',inplace=True)
                 
                 if self.comps:
-                    print(f"Prefiltering index with key {key}.",file=sys.stderr)
+                    print(f"Prefiltering index with key {self.key}.",file=sys.stderr)
                     print(f"Keeping target groups: {sorted(self.groups)}",file=sys.stderr)
                     # clear datasets of rows not present in the key
                     # comps_expanded = list()
@@ -112,19 +133,19 @@ class KSProcessingPreProcess:
                 cor = generateCorr(self.data[dictname])
                 cor.drop(index=findNaNs(cor).keys(),inplace=True)
                 cor.to_pickle(\
-                    os.path.join(picklePath ,f"{dictname}_CorrMat.pkl.gz"),
+                    os.path.join(self.picklePath ,f"{dictname}_CorrMat.pkl.gz"),
                               compression={'method':'gzip','compresslevel':9}
                               )
                     
                 euc = generateEucDist(self.data[dictname])
                 euc.drop(index=findNaNs(euc).keys(),inplace=True)
                 euc.to_pickle(\
-                    os.path.join(picklePath , f"{dictname}_DistMat.pkl.gz"),
+                    os.path.join(self.picklePath , f"{dictname}_DistMat.pkl.gz"),
                     compression={'method':'gzip','compresslevel':9}
                     )
                 print(f"Finished calculating and Pickling dataset: {dictname} with dimesions: {self.data[dictname].shape}",file=sys.stderr)          
         else:
-            print(f"dsNames provided. they are: {dsNames}",file=sys.stderr)
+            print(f"dsNames provided. they are: {self.dsNames}",file=sys.stderr)
             for name, f in tqdm(dsNames.items()):
                 currDataset = os.path.join(self.dataFolder, f)
                 print(f"Reading dataset {f} as {name}",file=sys.stderr)
@@ -145,20 +166,80 @@ class KSProcessingPreProcess:
                         #   self.key.shape, len(self.comps))
                     self.data[name] = self.data[name].loc[\
                         self.data[name].index.isin(\
-                            comps_expanded)].copy()
+                            self.comps_expanded)].copy()
                     # sys.exit(0)
                 generateCorr(self.data[name]).to_pickle(
-                    os.path.join(picklePath ,f"{name}_CorrMat.pkl.gz"),
+                    os.path.join(self.picklePath ,f"{name}_CorrMat.pkl.gz"),
                               compression={'method':'gzip','compresslevel':9}
                               )
                     
                 generateEucDist(self.data[name]).to_pickle(
-                    os.path.join(picklePath , f"{name}_DistMat.pkl.gz"),
+                    os.path.join(self.picklePath , f"{name}_DistMat.pkl.gz"),
                     compression={'method':'gzip','compresslevel':9}
                     )
                 print(f"Finished calculating and Pickling dataset: {name} with dimesions: {self.data[name].shape}",file=sys.stderr)
                 
         print("FINISHED READING FROM FILE: length of datasets collected:",len(self.data),file=sys.stderr)
+    
+    def _parallel(self,name,f):
+        currDataset = os.path.join(self.dataFolder, f)
+        print(f"Reading dataset {f} as {name}",file=sys.stderr)
+        self.data[name] = pd.read_csv(currDataset, index_col=0)
+        if self.data[name].index.name is None:
+            self.data[name].index.name = 'Index'
+        print(f"PRE DEDUP DATA SHAPE: {self.data[name].shape}",file=sys.stderr)
+        self.data[name] = dup(self.data[name])
+        print(f'FINISHED READING AND DUP ON {name}, dataset shape is {self.data[name].shape}',file=sys.stderr)
+        
+        if self.comps:
+            print(f"Prefiltering index with key \n{key}.",file=sys.stderr)
+            print(f"Keeping target groups: {sorted(self.groups)}",file=sys.stderr)
+            # clear datasets of rows not present in the key
+            # print(self.data[name].shape,
+                #   self.data[name].index,
+                #   len(comps_expanded),
+                #   self.key.shape, len(self.comps))
+            self.data[name] = self.data[name].loc[\
+                self.data[name].index.isin(\
+                    self.comps_expanded)].copy()
+            # sys.exit(0)
+        generateCorr(self.data[name]).to_pickle(
+            os.path.join(picklePath ,f"{name}_CorrMat.pkl.gz"),
+                        compression={'method':'gzip','compresslevel':9}
+                        )
+            
+        generateEucDist(self.data[name]).to_pickle(
+            os.path.join(picklePath , f"{name}_DistMat.pkl.gz"),
+            compression={'method':'gzip','compresslevel':9}
+            )
+        print(f"Finished calculating and Pickling dataset: {name} with dimesions: {self.data[name].shape}",file=sys.stderr)
+        
+    def _exec_parallel(argslist: list[tuple[str, str]],
+                     stop_on_exception: bool = False,
+                     max_workers:int = 4) -> dict[str, Exception]:
+        errors = {}
+        with futures.ProcessPoolExecutor(max_workers=max_workers
+                                        ) as executor:
+            # associate each future with its arguments, so we can go back and check which images failed (if any)
+            submitted = {executor.submit(_parallel, *args): args for args in argslist}
+            try:
+                for future in tqdm(futures.as_completed(submitted), total=len(submitted)):
+                    if future.cancelled():  # handle the case where the future was canceled by the code below if an exception was raised by a different future...
+                        continue
+                    name,f = submitted[future]
+                    if (exception := future.exception()) is not None:
+                        errors[image_template] = exception
+                        if stop_on_exception:
+                            # cancel all; it's a no-op if the future is already finished, so can do this en masse
+                            for future in submitted:
+                                future.cancel()
+                            stop_on_exception = False  # don't need to re-cancel everything if we see further exceptions
+            except BaseException:  # we want to catch everything, including KeyboardInterrupt, SystemExit, etc.
+                for future in submitted:
+                    future.cancel()
+                raise
+        return errors
+
     
                 
 class CommandLine:
@@ -181,6 +262,7 @@ class CommandLine:
         self.filterGroup.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
         self.filterGroup.add_argument('-in', '--include', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to include')
         self.parser.add_argument('-s', '--min_group_size', required=False, default=3, action='store',type=int, help='Minimum number of representatives in the key for each group. Default: 3')
+        self.parser.add_argument('--parallel', required=False, default=False, action='store_true', help='execute calculation in parallel')
         # self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         # self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
         # self.parser.add_argument('-rp','--read-pickle', action='store_true', default=False, help='use precomputed (and pickled) nxn similarity matrix pd.DataFrame instead of nxm DataFrame (found inside the pickles directory inside the dataset directory)\n'+\
@@ -212,7 +294,7 @@ def main(inOpts = None):
     key = pd.read_csv(keyFile, sep=',')
     print(excludes, dsNames,cl.args)
     # exit(0)
-    ks = KSProcessingPreProcess(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames,include=includes,min_group_size=cl.args.min_group_size)
+    ks = KSProcessingPreProcess(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames,include=includes,min_group_size=cl.args.min_group_size,parallel=cl.args.parallel)
     
 
 if __name__ == '__main__':
