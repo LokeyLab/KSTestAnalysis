@@ -206,15 +206,15 @@ class KSProcessingCLI:
             self.datasetCorr = dict()
             self.datasetDist = dict()
             for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl.gz")):
-                file = pickleFile.replace('.pkl.gz','')
-                if file.endswith('_CorrMat'):
+                f = pickleFile.replace('.pkl.gz','')
+                if f.endswith('_CorrMat'):
                     cor = pd.read_pickle(pickleFile)
                     cor.drop(index=findNaNs(cor).keys(),inplace=True)
-                    self.datasetCorr[file.replace('_CorrMat','')] = cor
-                elif file.endswith('_DistMat'):
+                    self.datasetCorr[os.path.basename(f).replace('_CorrMat','')] = cor
+                elif f.endswith('_DistMat'):
                     dist = pd.read_pickle(pickleFile)
                     dist.drop(index=findNaNs(dist).keys(),inplace=True)
-                    self.datasetDist[file.replace('_DistMat','')] = dist
+                    self.datasetDist[os.path.basename(f).replace('_DistMat','')] = dist
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
