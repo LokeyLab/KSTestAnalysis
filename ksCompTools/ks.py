@@ -100,7 +100,7 @@ def calcKS(group, data, euc = True, forceCalc = False):
 
         if euc:
             p = kstest(data_iFlat, fBk, alternative='greater')[1]
-            lims = [0,1]
+            lims = [0,max(fBkdata_i)]
         else:
             p = kstest(data_iFlat, fBk, alternative='less')[1]
             lims = [-1,1]
