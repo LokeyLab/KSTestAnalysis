@@ -81,6 +81,8 @@ def calcKS(group, data, euc = True, forceCalc = False):
         fBkdata_i = np.append(data_iFlat,fBk)
         #if forceCalc:
         # fBkdata_i = fBkdata_i[~np.isnan(fBkdata_i)]
+        #fBkdata_i = fBkdata_i[~np.isnan(fBkdata_i)]
+        #fBkdata_i.fillna(0,inplace=True)
         
         #lims = [np.quantile(fBkdata_i, q=0.02), np.quantile(fBkdata_i, q=0.98)]
 
@@ -99,9 +101,10 @@ def calcKS(group, data, euc = True, forceCalc = False):
 
         if euc:
             p = kstest(data_iFlat, fBk, alternative='greater')[1]
-            #lims = [0,1]
+            lims = [0,max(fBkdata_i)]
         else:
             p = kstest(data_iFlat, fBk, alternative='less')[1]
+            lims = [-1,1]
 
         ecdfData_i = ecdf(data_iFlat)
         ecdfFBk = ecdf(fBk)

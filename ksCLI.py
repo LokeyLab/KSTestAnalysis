@@ -15,7 +15,7 @@ def ensure_path_exists(file_path: pathlib.Path) -> pathlib.Path:
 
 def wideDf_to_hdf(filename, data, columns=None, maxColSize=2000, **kwargs):
     """Write a `pandas.DataFrame` with a large number of columns
-    to one HDFStore. From: https://stackoverflow.com/a/51931059
+    to one HDFStore.
 
     Parameters
     -----------
@@ -57,7 +57,6 @@ def wideDf_to_hdf(filename, data, columns=None, maxColSize=2000, **kwargs):
 
 def read_hdf_wideDf(filename, columns=None, **kwargs):
     """Read a `pandas.DataFrame` from a HDFStore.
-    From: https://stackoverflow.com/a/51931059
 
     Parameter
     ---------
@@ -93,22 +92,49 @@ def read_hdf_wideDf(filename, columns=None, **kwargs):
     store.close()
     return data
 
+def findNaNs (simMat: pd.DataFrame = None,simMat_path: str =None) -> dict:
+    nanOffenders = dict()
+    if simMat is None and simMat_path is not None:
+        simMat = pd.read_pickle(simMat_path)
+    elif simMat is not None and simMat_path is None:
+        simMat = simMat
+    print("Full simMat Shape:", simMat.shape,file=sys.stderr)
+    print("SimMat dropna Shape:", simMat.dropna().shape,file=sys.stderr)
+    naCounts = simMat.isna().sum(axis=1)
+    afflicted = simMat.loc[simMat.isna().sum(axis=1)>0].index.to_list()
+    print("number of afflicted nan columns:",len(afflicted),file=sys.stderr)
+    for aff in afflicted:
+        for i in simMat[aff].isna().argsort()[::-1][:naCounts[aff]].index:
+            # print(i)
+            if i not in nanOffenders:
+                nanOffenders[i] =1
+            elif i in nanOffenders:
+                nanOffenders[i] +=1
+    nanOffs = pd.Series(nanOffenders)
+    nanOffs = naCounts.index[(pd.Series(nanOffs) - naCounts)>0].to_list()
+    nanOffenders = {k:v for k,v in nanOffenders.items() if k in nanOffs}
+    return nanOffenders
 
 class KSProcessingCLI:
-    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, dsNames: dict = None, pickle: bool = False,read_pickle: bool = False):
+    def __init__(self, key: pd.DataFrame, dataFolder: str, keyTargs: list, exclude: list = None, include: list = None, dsNames: dict = None, pickle: bool = False,read_pickle: bool = False,min_group_size: int =3):
 
         #initializing data
         self.key = key
         self.dataFolder = dataFolder
         self.exclude = exclude
+        self.include = include
         self.keyTargs = keyTargs
         self.data = {}
         
         # determine groups
         self.groups = self.key[self.keyTargs[0]].value_counts(dropna=True, ascending=False)
-        self.groups = self.groups[self.groups > 3]
-        if self.exclude is not None:
+        self.groups = self.groups[self.groups > min_group_size]
+        if self.include is not None and self.exclude is None:
+            self.groups = self.groups[self.groups.index.isin(self.include)]
+        elif self.exclude is not None and self.include is None:
             self.groups = self.groups[~self.groups.index.isin(self.exclude)]
+        else:
+            print(f"INCLUDE AND EXCLUDE OPTIONS ARE MUTUALLY EXCLUSIVE.\n PROVIDE ON OR THE OTHER, NOT BOTH.",file=sys.stderr)
         self.groups = list(self.groups.index)
 
         #get final compounds and group ids
@@ -136,7 +162,12 @@ class KSProcessingCLI:
                     df = self.data[dictname]
                     print(f"FINISHED READING AND DUP ON {dictname}, dataset shape is {df.shape}",file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[dictname] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    nanAfflicted = df.loc[df.isna().sum(axis=0)>0.2*df.shape[1]].index.to_list()
+                    if len(nanAfflicted)>0:
+                        print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
+                        df.drop(index=nanAfflicted,inplace=True)
+                    self.data[dictname] = df
                     del df
             else:
                 print(f"dsNames provided. they are: {dsNames}",file=sys.stderr)
@@ -152,7 +183,12 @@ class KSProcessingCLI:
                     df = self.data[name]
                     print(f'FINISHED READING AND DUP ON {name}, dataset shape is {df.shape}',file=sys.stderr)
                     # clear datasets of rows not present in the key
-                    self.data[name] = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
+                    nanAfflicted = df.loc[df.isna().sum(axis=1)>0.2*df.shape[1]].index.to_list()
+                    if len(nanAfflicted)>0:
+                        print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
+                        df.drop(index=nanAfflicted,inplace=True)
+                    self.data[name] = df
                     del df
             print("FINISHED READING FROM FILE: length of datasets collected:",len(self.data),file=sys.stderr)        
             self.datasetCorr = {k:generateCorr(v) for k,v in self.data.items()}
@@ -160,27 +196,32 @@ class KSProcessingCLI:
             
             # once the nxn correlation and distmats are computed
             # OG dfs not needed, keep the df_names (keys)
-            #self.data = self.data.keys()
+            self.data = self.data.keys()
             
         else:
             print(f"reading pickled simMats from {os.path.join(self.dataFolder,'pickles')}",file=sys.stderr)
+            print(f"dsNames parameter is ignored, using pickle names instead",file=sys.stderr)
             # read pickled simMats from pickle folder inside data folder
             # dsNames ignored, only use pickle names
             self.datasetCorr = dict()
             self.datasetDist = dict()
-            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.hd5")):
-                file = pickleFile.replace('.hd5','')
-                if file.endswith('_CorrMat'):
-                    self.datasetCorr[file.replace('_CorrMat','')] = read_hdf_wideDf(pickleFile)#,'corrDF')
-                elif file.endswith('_DistMat'):
-                    self.datasetDist[file.replace('_DistMat','')] = read_hdf_wideDf(pickleFile)#,'distDF')
+            for pickleFile in tqdm(glob.glob(self.dataFolder+"/pickles/*.pkl.gz")):
+                f = pickleFile.replace('.pkl.gz','')
+                if f.endswith('_CorrMat'):
+                    cor = pd.read_pickle(pickleFile)
+                    cor.drop(index=findNaNs(cor).keys(),inplace=True)
+                    self.datasetCorr[os.path.basename(f).replace('_CorrMat','')] = cor
+                elif f.endswith('_DistMat'):
+                    dist = pd.read_pickle(pickleFile)
+                    dist.drop(index=findNaNs(dist).keys(),inplace=True)
+                    self.datasetDist[os.path.basename(f).replace('_DistMat','')] = dist
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
             #key='corrDF'
-            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_CorrMat.hd5"),data=corrDF,format='table',complevel=9,mode='w') for k,corrDF in tqdm(self.datasetCorr.items())]
+            [corrDF.to_pickle(os.path.join(picklePath , f"{k}_CorrMat.pkl.gz"),compression={'method':'gzip','compresslevel':9}) for k,corrDF in tqdm(self.datasetCorr.items())]
             #key='distDF'
-            [wideDf_to_hdf(os.path.join(picklePath , f"{k}_DistMat.hd5"),data=distDF,format='table', complevel=9,mode='w') for k,distDF in tqdm(self.datasetDist.items())]
+            [distDF.to_pickle(os.path.join(picklePath , f"{k}_DistMat.pkl.gz"),compression={'method':'gzip','compresslevel':9}) for k,distDF in tqdm(self.datasetDist.items())]
             
         assert len(self.datasetCorr) == len(self.datasetDist)
 
@@ -217,7 +258,9 @@ class KSProcessingCLI:
         self.pearsonECDF, self.euclideanECDF = plotData(pearsonData=self.datasetsCorrList, eucData=self.datasetsDistList, groups=self.comps, names=self.names, pdfName=outName, produceImg=produceImg)
     
     def generatePVals(self):
-        pearson, euc = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
+        euc, pearson = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
+        euc['keyGroupSize'] = [len(self.comps[x]) for x in euc.index]
+        pearson['keyGroupSize'] = [len(self.comps[x]) for x in pearson.index]
         return pearson, euc
     
     def plotPVals(self, pearson, euc, outName, **kwargs):
@@ -240,13 +283,16 @@ class CommandLine:
         self.parser.add_argument('-k', '--keyFile', type=str, required=True, nargs='?', action='store', help='Key file (.csv)')
         self.parser.add_argument('-d', '--datasets', type=str, required=True, nargs='?', action='store', help='A path to a folder containing all the datasets (.csv)')
         self.parser.add_argument('-kt', '--keyTarg', required=True, nargs='+', action='store', help='a list of keyFile header strings that contains the 1) compoundClass 2) rowIDs')
-        self.parser.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
+        self.filterGroup = self.parser.add_mutually_exclusive_group()
+        self.filterGroup.add_argument('-e', '--exclude', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to exclude')
+        self.filterGroup.add_argument('-in', '--include', required=False, default=None, action='store', help='an lst file (no header) containing a list of strings that define which classes to include')
         self.parser.add_argument('-o', '--outName', required=False, type=str, default='out', nargs='?', action='store', help='name for outputs')
         self.parser.add_argument('-n', '--name', required=False, type=FileType('r'), action='store', default=None, help='2-column lst file mapping dataset file name to desired name')
         self.parser.add_argument('-i', '--image', action='store_false', default=True, help='disables ecdf plotting (only generates p-value csv files)')
         self.parser.add_argument('-rp','--read-pickle', action='store_true', default=False, help='use precomputed (and pickled) nxn similarity matrix pd.DataFrame instead of nxm DataFrame (found inside the pickles directory inside the dataset directory)\n'+\
             "Also ignores '--name' parameter if provided")
         self.parser.add_argument('-p','--pickle', action='store_true', default=False, help = 'pickle save the computed nxn similarity matrices in the datasets path (will generated pickles folder in dataset directory)')
+        self.parser.add_argument('-s', '--min_group_size', required=False, default=3, action='store',type=int, help='Minimum number of representatives in the key for each group. Default: 3')
 
         #args
         if inOpts is None:
@@ -265,6 +311,9 @@ def main(inOpts = None):
     if cl.args.exclude is not None:
         excludes = [x.strip() for x in open(cl.args.exclude,'r').readlines()]
     else: excludes = cl.args.exclude
+    if cl.args.include is not None:
+        includes = [x.strip() for x in open(cl.args.include,'r').readlines()]
+    else: includes = cl.args.include
     if cl.args.name is not None:
         dsNames = {k:v for k,v in [x.strip().split('\t') for x in cl.args.name.readlines()]}
     else: dsNames = cl.args.name
@@ -272,7 +321,7 @@ def main(inOpts = None):
     key = pd.read_csv(keyFile, sep=',')
     print(excludes, cl.args,file=sys.stderr)
     #exit(0)
-    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle)
+    ks = KSProcessingCLI(key=key, dataFolder=dsFolder, keyTargs=keyTargs, exclude=excludes, dsNames=dsNames, read_pickle=cl.args.read_pickle, pickle=cl.args.pickle,include=includes, min_group_size=cl.args.min_group_size)
     
     pdf = f'{outFile}ecdfGraphs.pdf'
     ks.plotCalcData(outName=pdf, produceImg=prodImage)
