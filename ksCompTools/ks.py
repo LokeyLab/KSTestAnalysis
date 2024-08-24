@@ -80,7 +80,6 @@ def calcKS(group, data, euc = True, forceCalc = False):
 
         fBkdata_i = np.append(data_iFlat,fBk)
         #if forceCalc:
-        # fBkdata_i = fBkdata_i[~np.isnan(fBkdata_i)]
         #fBkdata_i = fBkdata_i[~np.isnan(fBkdata_i)]
         #fBkdata_i.fillna(0,inplace=True)
         

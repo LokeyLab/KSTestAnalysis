@@ -163,7 +163,7 @@ class KSProcessingCLI:
                     print(f"FINISHED READING AND DUP ON {dictname}, dataset shape is {df.shape}",file=sys.stderr)
                     # clear datasets of rows not present in the key
                     df = df.loc[df.index.isin(self.key[self.keyTargs[1]].to_list())].copy()
-                    nanAfflicted = df.loc[df.isna().sum(axis=0)>0.2*df.shape[1]].index.to_list()
+                    nanAfflicted = df.loc[df.isna().sum(axis=1)>0.2*df.shape[1]].index.to_list()
                     if len(nanAfflicted)>0:
                         print(f"NAN FOUND IN THE DATASET. REMOVING {nanAfflicted}",file=sys.stderr)
                         df.drop(index=nanAfflicted,inplace=True)
