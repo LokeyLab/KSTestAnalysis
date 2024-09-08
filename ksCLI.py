@@ -215,6 +215,9 @@ class KSProcessingCLI:
                     dist = pd.read_pickle(pickleFile)
                     dist.drop(index=findNaNs(dist).keys(),inplace=True)
                     self.datasetDist[os.path.basename(f).replace('_DistMat','')] = dist
+        
+        self.comps_intersections_dist = self.find_comps_intersections(datasets='euclidean')
+        self.comps_intersections_corr = self.find_comps_intersections(datasets='pearson')
 
         if pickle:
             picklePath = ensure_path_exists(os.path.join(self.dataFolder,"pickles"))
@@ -231,7 +234,7 @@ class KSProcessingCLI:
         self.datasetsDistList = [v for k,v in sorted(self.datasetDist.items(), key=lambda a:a[0])]
 
         print("n x n pairwise distmats calc'd. length of dataset lists:", len(self.names),len(self.datasetCorr),len(self.datasetDist),file=sys.stderr)
-
+                
         # plotting Data
         self.pearsonECDF = None
         self.euclideanECDF = None
@@ -240,6 +243,21 @@ class KSProcessingCLI:
     @property
     def getGroups(self):
         return self.groups
+    
+    def find_comps_intersections(self,datasets:str):
+        comps_intersect= {group:set() for group in self.groups}
+        if datasets == 'euclidean':
+            for name,dataset in self.datasetsDist.items():
+                dataset_samples = dataset.index  # Get the sample names from the dataset
+                for group, samples in self.comps.items():
+                    comps_intersect[group].update(set(dataset_samples).intersection(samples))
+        elif datasets == 'pearson':
+            for name,dataset in self.datasetsCorr.items():
+                dataset_samples = dataset.index  # Get the sample names from the dataset
+                for group, samples in self.comps.items():
+                    comps_intersect[group].update(set(dataset_samples).intersection(samples))
+                            
+        return comps_intersect
     
     def generateObjs(self, selectComps: list = None):
         if selectComps is not None:
@@ -260,7 +278,9 @@ class KSProcessingCLI:
     def generatePVals(self):
         euc, pearson = getPvalues(eucData=self.euclideanECDF, pearsonData=self.pearsonECDF, groups=self.groups)
         euc['keyGroupSize'] = [len(self.comps[x]) for x in euc.index]
+        euc['testedUnionSize'] = [len(self.comps_intersections_dist[x]) for x in euc.index]
         pearson['keyGroupSize'] = [len(self.comps[x]) for x in pearson.index]
+        pearson['testedUnionSize'] = [len(self.comps_intersections_corr[x]) for x in pearson.index]
         return pearson, euc
     
     def plotPVals(self, pearson, euc, outName, **kwargs):
